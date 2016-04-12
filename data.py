@@ -17,6 +17,7 @@ class data(object):
         self.PTVNames = dataDict['ptvnames']
         self.aperLimit = dataDict['aperLimitFlag'] or self.nBeams
         self.useGPU = dataDict['useGPU']
+        self.modelType = dataDict['modelType']
 
 
         self.structureNames = []
@@ -139,12 +140,12 @@ class data(object):
             self.overPenalty = newData['over'].flatten()
             print 'Objective parameters updated from', filename
 
-class data_imrt(data):
+class data_fmo(data):
     def __init__(self, dataDict):
-        if dataDict['modelType'] != 'imrt':
+        if dataDict['modelType'] != 'fmo':
             print 'ERROR IN MODEL TYPE'
             exit()
-        super(data_imrt, self).__init__(dataDict)
+        super(data_fmo, self).__init__(dataDict)
 
 
     def readInModalityData(self, dataDict):

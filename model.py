@@ -23,22 +23,25 @@ import numexpr as ne
 
 class model(object):
     def __init__(self, dat, showPlots = False):
+        self.data = None
         if not isinstance(dat, data):
             print 'data type wrong'
             exit()
         self.finaldoseDict = {}
+        self.finalobjDict = {}
         self.doseindex='0'
         self.showPlots = showPlots
-
+        self.finaldose = None
+        self.obj = 0
 
     def solve(self):
         pass
 
-    def quadSolver(self,calcObjGrad, numY, x0 ,UB=None):
+    def quadSolver(self,calcObjGrad, numY, x0 ,UB=None,display=False):
         res = spo.minimize(calcObjGrad, x0=x0, method='L-BFGS-B', jac=True, bounds=[(0, UB) for i in
                                                                                                               xrange(
                                                                                                                   numY)],
-                                    options={'ftol': 1e-4, 'disp': False})
+                                    options={'ftol': 1e-4, 'disp': display})
         return res['x'], res['fun']
 
 
@@ -49,18 +52,137 @@ class model(object):
 
 
     def outputDose(self):
+        fullDoseOut = np.zeros(self.data.nVoxFull)
+        fullDoseOut[self.data.voxelIndicesInFull] = self.finaldose.copy()
+        fullDoseOut3D = fullDoseOut.reshape(self.data.voxDim, order='F')
+        outputDict = {'obj': self.obj,'dose': self.finaldose, 'fullResDose': fullDoseOut, 'fullResDose3d': fullDoseOut3D}
+
+        outputDict.update(self.outputDoseModality())
+
+        sio.savemat(self.data.workingDir + 'doseout_' + self.data.modelType + '_' + self.doseindex + '.mat',
+                   outputDict)
+
+    def outputDoseModality(self):
         pass
 
-    def plotDVH(self):
-        pass
+    def plotDVH(self,plotFull=False,saveName='', showPlots=False, saveDVH=True):
+        dose = self.finaldose.copy()
+        plt.clf()
+        for s in range(self.data.nStructures):
+            if plotFull:
+                sVoxels = self.data.structureVoxelsOverlap[s]
+            else:
+                if not self.data.structureVoxels[s].size > 0:
+                    continue
+                sVoxels = self.data.structureVoxels[s]
+            hist, bins = np.histogram(dose[sVoxels], bins=100)
+            dvh = 1. - np.cumsum(hist) / float(sVoxels.shape[0])
+            plt.plot(bins[:-1], dvh, label=self.data.structureNames[s], linewidth=2)
+        lgd = plt.legend( fancybox=True, framealpha=0.5,bbox_to_anchor=(1.05, 1),loc=2)
+        plt.title('DVH for doseindex:' + self.doseindex)
+        if len(saveName) > 1 or saveDVH:
+            saveTag = self.getSaveTag()
+            plt.savefig(self.data.workingDir + 'dvh_' + saveName + '_' + saveTag+ '.png',
+                        bbox_extra_artists=(lgd,), bbox_inches='tight')
+        if showPlots:
+            plt.show()
 
-    def plotAllDVH(self):
-        pass
+    def getSaveTag(self):
+        return 'WRITESAVETAGFUNCTION'
+
+    def pltAllDVH(self,saveName='', plotSpecific=[], saveDVH=True):
+        rainbow = ['r', 'c', 'darkblue', 'maroon', 'black', 'gray', 'g', 'peru', 'yellow', 'salmon', 'cadetblue']
+        styles = ['solid', 'dashed', 'dotted', 'dashdot']
+        plt.clf()
+        title=''
+        count, lgd = 0, None
 
 
-class model_imrt(model):
+        for doseIndex, DoseDist in sorted(self.finaldoseDict.iteritems()):
+            if len(plotSpecific)>0 and doseIndex not in set(plotSpecific):
+                continue
+
+            dose = DoseDist[:]
+            title = title + 'DI: '+ doseIndex + ' - ' + styles[count%len(styles)] + ' | '
+
+            for s in range(self.data.nStructures):
+                if self.data.structureVoxels[s].shape[0] > 0:
+                    hist, bins = np.histogram(dose[self.data.structureVoxels[s]], bins=100)
+                    dvh = 1. - np.cumsum(hist) / float(self.data.structureVoxels[s].shape[0])
+                    plt.plot(bins[:-1], dvh, label=self.data.structureNames[s], color=rainbow[s % len(rainbow)],
+                             linestyle=styles[count % len(styles)], linewidth=2)
+            if count==0:
+                lgd = plt.legend(fancybox=True, framealpha=0.5,bbox_to_anchor=(1.05, 1),loc=2)
+            count += 1
+        plt.title(title)
+        plt.xlabel('Dose')
+        plt.ylabel('Fractional Volume')
+        if len(saveName)>1 or saveDVH:
+            saveTag = self.getSaveTag()
+            plt.savefig(self.data.workingDir + 'dvh_all_' + saveName + '_' + saveTag + '.png',
+                        bbox_extra_artists=(lgd,), bbox_inches='tight')
+        if self.showPlots:
+            plt.show()
+
+
+class model_fmo(model):
     def __init__(self, dat):
-        super(model_imrt, self).__init__(dat)
+        super(model_fmo, self).__init__(dat)
+        if isinstance(dat, data_fmo):
+            self.data = dat
+            print 'data type correct for specific type'
+        else:
+            print 'data type wrong'
+            exit()
+        self.x0pB = [np.zeros(self.data.nBPB[b]) for b in range(self.data.nBeams)]
+        self.x0 = np.zeros(self.data.nBeamlets)
+        self.currentDose = np.zeros(self.data.nVox)
+        if self.data.comparisonDose is not None:
+            self.finaldoseDict['original'] = self.data.comparisonDose
+
+    def solve(self):
+
+        start = time()
+
+        self.fluence, obj = self.quadSolver(self.calcObjGrad,self.data.nBeamlets,self.x0.copy(),display=True)
+
+        # self.res = spo.minimize(self.calcObjGrad, x0=self.x0.copy(), method='L-BFGS-B', jac=True, bounds=[(0, None) for i in
+        #                                                                                                   xrange(
+        #                                                                                                       self.data.nBeamlets)],
+        #                         options={'ftol': 1e-4, 'disp': 5})
+        print 'solved in ', time()-start, ' seconds'
+        # self.fluence = self.res['x']
+        self.fluencepB = [self.fluence[self.data.nBPBcum[b]:self.data.nBPBcum[b+1]] for b in range(self.data.nBeams)]
+        self.finaldose = self.currentDose.copy()
+        self.finaldoseDict[self.doseindex] = self.finaldose.copy()
+        self.finalobjDict[self.doseindex] = obj
+        self.obj = obj
+
+    def calcDose(self, fluence):
+        self.currentDose = np.zeros(self.data.nVox)
+        for b in range(self.data.nBeams):
+            self.currentDose += self.data.dijList[b].dot(fluence[self.data.nBPBcum[b]:self.data.nBPBcum[b + 1]])
+
+    def calcObjGrad(self, fluence):
+        self.calcDose(fluence)
+
+        oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
+        obj = float(self.data.overPenalty.dot(oDose.clip(0) ** 2) + self.data.underPenalty.dot(uDose.clip(-1e10, 0) ** 2))
+        grad = np.zeros(self.data.nBeamlets)
+        zhat = np.multiply(self.data.overPenalty, oDose.clip(0)) + np.multiply(self.data.underPenalty, uDose.clip(-1e10, 0))
+
+        for b in range(self.data.nBeams):
+                grad[self.data.nBPBcum[b]:self.data.nBPBcum[b + 1]] = self.data.dijList[b].transpose().dot(zhat)
+
+        return obj, grad
+
+    def getSaveTag(self):
+        savetag = 'fmo'
+        return savetag
+
+    def outputDoseModality(self):
+        outputDict = {'obj': self.obj, 'fluence': self.fluence, 'fluencepB': self.fluencepB, 'thresh': self.data.thresh, 'over': self.data.overPenalty, 'under': self.data.underPenalty}
+        return outputDict
 
 
 
@@ -108,6 +230,14 @@ class model_dao(model):
         else:
             grad = []
         return obj, grad
+
+    def getSaveTag(self):
+        savetag = ''
+        if self.data.vmatFlag:
+            savetag = savetag + 'vmat_' + str(self.data.aperLimit)
+        else:
+            savetag = savetag + 'dao_' + str(self.data.aperLimit)
+        return savetag
 
     def solve(self):
 
@@ -159,7 +289,7 @@ class model_dao(model):
         #final RMP solution
         self.yRMP = self.y[0:self.currentY]
         self.data.DkjRMP = sps.csc_matrix(self.data.Dkj[:, 0:self.currentY])
-        self.y[0:self.currentY],obj = self.quadSolver(self.calcObjGrad,self.currentY,self.y[0:self.currentY].copy(),UB=None)
+        self.y[0:self.currentY], obj = self.quadSolver(self.calcObjGrad,self.currentY,self.y[0:self.currentY].copy(),UB=None)
         self.objPerIter.append(obj)
         #
         # self.res = spo.minimize(self.calcObjGrad, x0=self.yRMP.copy(), method='L-BFGS-B', jac=True, bounds=[(0, None) for i in
@@ -170,6 +300,8 @@ class model_dao(model):
         # self.objPerIter.append(self.res['fun'])
         self.calcDose(self.y)
         self.finaldose = self.currentDose.copy()
+        self.finaldoseDict[self.doseindex] = self.currentDose.copy()
+        self.finalobjDict[self.doseindex] = obj
         self.obj = obj
 
     def getBeamletGrad(self, zhat, b):
@@ -329,3 +461,7 @@ class model_dao(model):
                 beamlets.append(i)
             worth+=maxSoFar
         return worth,beamlets
+
+    def outputDoseModality(self):
+        outputDict = {'obj': self.obj, 'y': self.y, 'beamlets':self.yAperBeamlets, 'thresh': self.data.thresh, 'over': self.data.overPenalty, 'under': self.data.underPenalty}
+        return outputDict
