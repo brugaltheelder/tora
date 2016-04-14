@@ -37,11 +37,11 @@ class model(object):
     def solve(self):
         pass
 
-    def quadSolver(self,calcObjGrad, numY, x0 ,UB=None,display=False):
+    def quadSolver(self,calcObjGrad, numY, x0 ,UB=None,display=False,ftol=1e-5):
         res = spo.minimize(calcObjGrad, x0=x0, method='L-BFGS-B', jac=True, bounds=[(0, UB) for i in
                                                                                                               xrange(
                                                                                                                   numY)],
-                                    options={'ftol': 1e-4, 'disp': display})
+                                    options={'ftol': ftol, 'disp': display})
         return res['x'], res['fun']
 
 
@@ -144,7 +144,7 @@ class model_fmo(model):
 
         start = time()
 
-        self.fluence, obj = self.quadSolver(self.calcObjGrad,self.data.nBeamlets,self.x0.copy(),display=True)
+        self.fluence, obj = self.quadSolver(self.calcObjGrad,self.data.nBeamlets,self.x0.copy(),display=5)
 
         # self.res = spo.minimize(self.calcObjGrad, x0=self.x0.copy(), method='L-BFGS-B', jac=True, bounds=[(0, None) for i in
         #                                                                                                   xrange(

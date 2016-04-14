@@ -44,17 +44,17 @@ ptvnames = ['PTV_56','PTV_68']
 if len(sys.argv) > 1:
     nbeams = int(sys.argv[1])
 else:
-    nbeams = 180
+    nbeams = 10
 
 beams = [int(360./nbeams*i) for i in range(nbeams)]
 
 
 dataDir = 'Prostate/'
-workingDir = dataDir + 'VMAT/beams_'+str(nbeams)+'/'
+workingDir = dataDir + 'CASE/beams_'+str(nbeams)+'/'
 if not os.path.isdir(workingDir):
     os.makedirs(workingDir)
 
-vmatFlag = False
+vmatFlag = True
 aperLimitFlag = None
 useGPUFlag = False
 
@@ -64,3 +64,6 @@ d = {'modelType': 'vmat', 'weightUnderOverDict': weightUnderOverDict, 'weightPri
      'vmatFlag':vmatFlag, 'aperLimitFlag':aperLimitFlag, 'threshOverride':None, 'overWOverride':None, 'underWOverride':None,'comparisonDose':None,'useGPU':useGPUFlag}
 
 
+# import json
+# with open('testDictOut.json','w') as f:
+#     json.dump(d,f)

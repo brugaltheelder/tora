@@ -79,6 +79,7 @@ class data(object):
         for s in range(self.nStructures):
             sReal = self.structureNamesInverse[self.weightPriorityDict[s]]
             self.singleStructureAssignmentVector[self.structureVoxelsOverlap[sReal]] = sReal
+
         self.structureVoxels = []
         for s in range(self.nStructures):
             self.structureVoxels.append(np.where(self.singleStructureAssignmentVector == s)[0])
@@ -155,7 +156,7 @@ class data_fmo(data):
 class data_dao(data):
     def __init__(self, dataDict):
 
-        if dataDict['modelType'] != 'vmat':
+        if dataDict['modelType'] != 'vmat' and dataDict['modelType']!='dao':
             print 'ERROR IN MODEL TYPE'
             exit()
         super(data_dao, self).__init__(dataDict)
