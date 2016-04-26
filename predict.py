@@ -43,10 +43,10 @@ class predictDose(object):
         for s in range(self.data.nStructures):
             wO, wU = 0., 0.
             if self.data.structureNames[s] not in set(self.data.PTVNames) and self.data.structureVoxels[s].size >0:
-                wO = np.average(self.refDose[self.data.structureVoxels[s]]) ** oarExponent
+                wO += 1.+np.average(self.refDose[self.data.structureVoxels[s]]) ** oarExponent
             elif self.data.structureVoxels[s].size>0:
-                wO = np.average(self.refDose[self.data.structureVoxels[s]]) ** ptvOverdoseExponent
-                wU = np.average(self.refDose[self.data.structureVoxels[s]]) ** ptvUnderdoseExponent
+                wO += 1.+np.average(self.refDose[self.data.structureVoxels[s]]) ** ptvOverdoseExponent
+                wU += 1.+np.average(self.refDose[self.data.structureVoxels[s]]) ** ptvUnderdoseExponent
             self.structureWeights[self.data.structureNames[s]] = (wU, wO)
 
     def setStructureWeightingFromValues(self, OARU=-1, OARO=-1, PTVU=-1, PTVO=-1,oarExponent=1., ptvOverdoseExponent=1., ptvUnderdoseExponent=1.):
@@ -86,10 +86,10 @@ class predictDose(object):
                 #keeps PTV the same!
                 if updateTargetDose:
                     #self.voxelThresh[self.data.structureVoxels[sReal]] = np.minimum(sortedRefDose[sReal],self.data.threshDict[self.data.weightPriorityDict[s]]) + targetScalingFactor * np.abs(self.data.threshDict[self.data.weightPriorityDict[s]] - sortedRefDose[sReal])
-                    self.voxelThresh[self.data.structureVoxels[sReal]] = (1.-targetScalingFactor) * sortedRefDose[sReal] + 1. * targetScalingFactor * self.data.threshDict[self.data.weightPriorityDict[s]]
-                    self.voxelUnderPenalty[self.data.structureVoxels[sReal]] = 1. * self.structureWeights[self.data.structureNames[sReal]][0] / self.data.structureVoxels[
+                    self.voxelThresh[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = (1.-targetScalingFactor) * sortedRefDose[sReal] + 1. * targetScalingFactor * self.data.threshDict[self.data.weightPriorityDict[s]]
+                    self.voxelUnderPenalty[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = 1. * self.structureWeights[self.data.structureNames[sReal]][0] / self.data.structureVoxels[
                         sReal].size
-                    self.voxelOverPenalty[self.data.structureVoxels[sReal]] = 1. * self.structureWeights[self.data.structureNames[sReal]][1] / self.data.structureVoxels[
+                    self.voxelOverPenalty[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = 1. * self.structureWeights[self.data.structureNames[sReal]][1] / self.data.structureVoxels[
                         sReal].size
                 else:
                     self.voxelThresh[self.data.structureVoxels[sReal]] = self.data.threshDict[self.data.weightPriorityDict[s]]
