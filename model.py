@@ -30,6 +30,7 @@ class model(object):
         self.finalobjDict = {}
         self.doseindex = '0'
         self.showPlots = showPlots
+        self.currentDose = np.zeros(dat.nVox)
         self.finaldose = None
         self.obj = 0
 
@@ -76,6 +77,9 @@ class model(object):
             plt.plot(bins[:-1], dvh, label=self.data.structureNames[s], linewidth=2)
         lgd = plt.legend(fancybox=True, framealpha=0.5, bbox_to_anchor=(1.05, 1), loc=2)
         plt.title('DVH for doseindex:' + self.doseindex)
+
+        plt.xlabel('Dose')
+        plt.ylabel('Fractional Volume')
         if len(saveName) > 1 or saveDVH:
             saveTag = self.getSaveTag()
             plt.savefig(self.data.workingDir + 'dvh_' + saveName + '_' + saveTag + '.png',
@@ -85,6 +89,14 @@ class model(object):
 
     def getSaveTag(self):
         return 'WRITESAVETAGFUNCTION'
+
+
+    def getObjUpdateZhat(self,zhat,uT,oT,uW,oW):
+        oDose, uDose = np.array(self.currentDose - oT).clip(0), np.array(self.currentDose - uT).clip(-1e10,0)
+        obj = float(oW.dot(oDose**2)+uW.dot(uDose**2))
+        zhat += np.multiply(oW,oDose) + np.multiply(uW,uDose)
+        return obj
+
 
     def pltAllDVH(self, saveName='', plotSpecific=[], saveDVH=True, plotFull=False):
         rainbow = ['r', 'c', 'darkblue', 'maroon', 'black', 'gray', 'g', 'peru', 'yellow', 'salmon', 'cadetblue']
@@ -119,6 +131,7 @@ class model(object):
         plt.title(title)
         plt.xlabel('Dose')
         plt.ylabel('Fractional Volume')
+
         if len(saveName) > 1 or saveDVH:
             saveTag = self.getSaveTag()
             plt.savefig(self.data.workingDir + 'dvh_all_' + saveName + '_' + saveTag + '.png',
@@ -138,7 +151,7 @@ class model_fmo(model):
             exit()
         self.x0pB = [np.zeros(self.data.nBPB[b]) for b in range(self.data.nBeams)]
         self.x0 = np.zeros(self.data.nBeamlets)
-        self.currentDose = np.zeros(self.data.nVox)
+
         if self.data.comparisonDose is not None:
             self.finaldoseDict['original'] = self.data.comparisonDose
 
@@ -168,12 +181,21 @@ class model_fmo(model):
     def calcObjGrad(self, fluence):
         self.calcDose(fluence)
 
-        oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
-        obj = float(
-            self.data.overPenalty.dot(oDose.clip(0) ** 2) + self.data.underPenalty.dot(uDose.clip(-1e10, 0) ** 2))
+        # oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
+        # oDose, uDose = np.array(self.currentDose - self.data.overThresh), np.array(self.currentDose - self.data.underThresh)
+        # obj = float(
+        #     self.data.overPenalty.dot(oDose.clip(0) ** 2) + self.data.underPenalty.dot(uDose.clip(-1e10, 0) ** 2))
+        #
+        # zhat = np.multiply(self.data.overPenalty, oDose.clip(0)) + np.multiply(self.data.underPenalty,
+        #                                                                        uDose.clip(-1e10, 0))
         grad = np.zeros(self.data.nBeamlets)
-        zhat = np.multiply(self.data.overPenalty, oDose.clip(0)) + np.multiply(self.data.underPenalty,
-                                                                               uDose.clip(-1e10, 0))
+        zhat = np.zeros(self.data.nVox)
+        obj = 0.0
+        obj += self.getObjUpdateZhat(zhat, self.data.underThresh,self.data.overThresh,self.data.underPenalty,self.data.overPenalty)
+
+        if self.data.basePenalty:
+            obj += self.getObjUpdateZhat(zhat, self.data.baseThresh,self.data.baseThresh,self.data.basePenaltyUnder,self.data.basePenaltyOver)
+
 
         for b in range(self.data.nBeams):
             grad[self.data.nBPBcum[b]:self.data.nBPBcum[b + 1]] = self.data.dijList[b].transpose().dot(zhat)
@@ -186,6 +208,7 @@ class model_fmo(model):
 
     def outputDoseModality(self):
         outputDict = {'obj': self.obj, 'fluence': self.fluence, 'fluencepB': self.fluencepB, 'thresh': self.data.thresh,
+                      'overThresh':self.data.overThresh,'underThresh':self.data.underThresh,
                       'over': self.data.overPenalty, 'under': self.data.underPenalty}
         return outputDict
 
@@ -206,7 +229,7 @@ class model_dao(model):
         self.yAperBeamlets = [None] * self.data.aperLimit
         self.aperColLeftPerRow = [[-1 for r in range(self.data.spacedRowMax)] for b in range(self.data.aperLimit)]
         self.aperColRightPerRow = [[-1 for r in range(self.data.spacedRowMax)] for b in range(self.data.aperLimit)]
-        self.currentY, self.currentDose = 0, np.zeros(self.data.nVox)
+        self.currentY = 0
 
         self.data.Dkj = np.zeros((self.data.nVox, self.data.aperLimit))
         self.beamUsed = np.zeros(self.data.nBeams, dtype='int32')
@@ -245,9 +268,14 @@ class model_dao(model):
 
     def calcObjGrad(self, yVec):
         self.calcDose(yVec)
-        oDose = np.array(self.currentDose - self.data.thresh)
-        uDose = oDose.clip(-1e10, 0)
-        oDose = oDose.clip(0)
+        # oDose = np.array(self.currentDose - self.data.thresh).clip(0)
+        # uDose = oDose.clip(-1e10, 0)
+        # oDose = oDose.clip(0)
+
+        oDose = np.array(self.currentDose - self.data.overThresh).clip(0)
+        uDose = np.array(self.currentDose - self.data.underThresh).clip(-1e10, 0)
+
+
 
         obj = float(self.data.overPenalty.dot(ne.evaluate('oDose ** 2')) + self.data.underPenalty.dot(
             ne.evaluate('uDose ** 2')))
@@ -350,7 +378,9 @@ class model_dao(model):
         bestEndpointsR = []
         # calc helpers
         self.calcDose(yVec)
-        oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
+        oDose, uDose = np.array(self.currentDose - self.data.overThresh), np.array(self.currentDose - self.data.underThresh)
+        #oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
+
         zhat = np.multiply(self.data.overPenalty, oDose.clip(0)) + np.multiply(self.data.underPenalty,
                                                                                uDose.clip(-1e10, 0))
 
@@ -463,7 +493,8 @@ class model_dao(model):
         bestAperScore = 0
         # calc helpers
         self.calcDose(yVec)
-        oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
+        # oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
+        oDose, uDose = np.array(self.currentDose - self.data.overThresh), np.array(self.currentDose - self.data.underThresh)
         zhat = np.multiply(self.data.overPenalty, oDose.clip(0)) + np.multiply(self.data.underPenalty,
                                                                                uDose.clip(-1e10, 0))
         for b in range(self.data.nBeams):
@@ -505,5 +536,6 @@ class model_dao(model):
 
     def outputDoseModality(self):
         outputDict = {'obj': self.obj, 'y': self.y, 'beamlets': self.yAperBeamlets, 'thresh': self.data.thresh,
+                      'overThresh':self.data.overThresh,'underThresh':self.data.underThresh,
                       'over': self.data.overPenalty, 'under': self.data.underPenalty}
         return outputDict

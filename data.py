@@ -18,7 +18,7 @@ class data(object):
         self.aperLimit = dataDict['aperLimitFlag'] or self.nBeams
         self.useGPU = dataDict['useGPU']
         self.modelType = dataDict['modelType']
-
+        self.dualThresh = dataDict['dualThresh']
 
         self.structureNames = []
         self.structureVoxelsFull = []
@@ -125,8 +125,75 @@ class data(object):
         else:
             self.comparisonDose = None
 
+        if 'underTOverride' not in dataDict.keys():
+            self.underThresh = self.thresh.copy()
+        else:
+            self.underThresh = dataDict['underTOverride']
+        if 'overTOverride' not in dataDict.keys():
+            self.overThresh = self.thresh.copy()
+        else:
+            self.overThresh = dataDict['overTOverride']
+
+        # set base penalty
+        if 'basePenalty' not in dataDict.keys():
+            self.basePenalty = False
+        else:
+            self.basePenalty = dataDict['basePenalty']
+
+        if 'basePenaltyWeightOAR' not in dataDict.keys():
+            self.basePenaltyWeightOAR = 1.
+        else:
+            self.basePenaltyWeightOAR = dataDict['basePenaltyWeightOAR']
+
+        if 'basePenaltyWeightPTV' not in dataDict.keys():
+            self.basePenaltyWeightPTV = 1.
+        else:
+            self.basePenaltyWeightPTV = dataDict['basePenaltyWeightPTV']
+
+        # build base penalty threshold
+        self.buildBasePenaltyVectors()
+
         # read in modality part
         self.readInModalityData(dataDict)
+
+    def buildBasePenaltyVectors(self, oarWeight=None, ptvWeight=None):
+        if oarWeight is None:
+            oarWeight = self.basePenaltyWeightOAR
+        if ptvWeight is None:
+            ptvWeight = self.basePenaltyWeightPTV
+        self.baseThresh = np.zeros(self.nVox, dtype='float64')
+        self.basePenaltyOver = np.zeros(self.nVox, dtype='float64')
+        self.basePenaltyUnder = np.zeros(self.nVox, dtype='float64')
+        for s in range(self.nStructures):
+            if self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]].size > 0:
+                # IF STRUCTURE IS OAR THEN USE OAR PENALTY, O/W USE TARGET
+                over, under = oarWeight, oarWeight
+                if self.structureNamesInverse[self.weightPriorityDict[s]] in self.PTVNames:
+                    over, under = ptvWeight, ptvWeight
+
+                self.basePenaltyUnder[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
+                                                                                                                  under / \
+                                                                                                                  self.structureVoxels[
+                                                                                                                      self.structureNamesInverse[
+                                                                                                                          self.weightPriorityDict[
+                                                                                                                              s]]].size
+                self.basePenaltyOver[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
+                                                                                                                  over / \
+                                                                                                                  self.structureVoxels[
+                                                                                                                      self.structureNamesInverse[
+                                                                                                                          self.weightPriorityDict[
+                                                                                                                              s]]].size
+
+                self.baseThresh[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = self.threshDict[self.weightPriorityDict[s]]
+
+
+    def updateOverUnderThresh(self, newThreshU=None, newThreshO=None):
+        if newThreshU is None:
+            newThreshU = self.thresh.copy()
+        if newThreshO is None:
+            newThreshO = self.thresh.copy()
+        self.overThresh = newThreshO.copy()
+        self.underThresh = newThreshU.copy()
 
     def readInModalityData(self, dataDict):
         print 'please write child function'
@@ -141,13 +208,13 @@ class data(object):
             self.overPenalty = newData['over'].flatten()
             print 'Objective parameters updated from', filename
 
+
 class data_fmo(data):
     def __init__(self, dataDict):
         if dataDict['modelType'] != 'fmo':
             print 'ERROR IN MODEL TYPE'
             exit()
         super(data_fmo, self).__init__(dataDict)
-
 
     def readInModalityData(self, dataDict):
         print 'child Modality data readin'
@@ -156,7 +223,7 @@ class data_fmo(data):
 class data_dao(data):
     def __init__(self, dataDict):
 
-        if dataDict['modelType'] != 'vmat' and dataDict['modelType']!='dao':
+        if dataDict['modelType'] != 'vmat' and dataDict['modelType'] != 'dao':
             print 'ERROR IN MODEL TYPE'
             exit()
         super(data_dao, self).__init__(dataDict)

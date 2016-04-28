@@ -61,7 +61,7 @@ useGPUFlag = False
 d = {'modelType': 'vmat', 'weightUnderOverDict': weightUnderOverDict, 'weightPriorityDict': weightPriorityDict,
      'threshDict': threshDict, 'voxDim': voxDimTup, 'leafDistPerDeg': leafDistPerDeg, 'vmatColStep': vmatColStep,'voxSampling':voxSampling,
      'vmatRowStep': vmatRowStep, 'nbeams':nbeams, 'dataDir':dataDir, 'workingDir':workingDir, 'beams':beams, 'ptvnames':ptvnames,
-     'vmatFlag':vmatFlag, 'aperLimitFlag':aperLimitFlag, 'threshOverride':None, 'overWOverride':None, 'underWOverride':None,'comparisonDose':None,'useGPU':useGPUFlag}
+     'vmatFlag':vmatFlag, 'aperLimitFlag':aperLimitFlag, 'threshOverride':None, 'overWOverride':None, 'underWOverride':None,'comparisonDose':None,'useGPU':useGPUFlag, 'dualThresh':True}
 
 
 # import json

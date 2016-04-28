@@ -38,15 +38,19 @@ class predictDose(object):
     def predictDose(self):
         print 'write dose prediction function'
 
-    def genStructureWeightingFromArea(self,oarExponent=1., ptvOverdoseExponent=1., ptvUnderdoseExponent=1.):
-        print 'generating structure weights based on ref dose DVH area'
+    def genStructureWeightingFromArea(self,sourceDose=None, oarExponent=1., ptvOverdoseExponent=1., ptvUnderdoseExponent=1.):
+        print 'generating structure weights based on some dose DVH area'
+        if sourceDose is not None:
+            dose = sourceDose.copy()
+        else:
+            dose = self.refDose.copy()
         for s in range(self.data.nStructures):
             wO, wU = 0., 0.
             if self.data.structureNames[s] not in set(self.data.PTVNames) and self.data.structureVoxels[s].size >0:
-                wO += 1.+np.average(self.refDose[self.data.structureVoxels[s]]) ** oarExponent
+                wO += 1.+np.average(dose[self.data.structureVoxels[s]]) ** oarExponent
             elif self.data.structureVoxels[s].size>0:
-                wO += 1.+np.average(self.refDose[self.data.structureVoxels[s]]) ** ptvOverdoseExponent
-                wU += 1.+np.average(self.refDose[self.data.structureVoxels[s]]) ** ptvUnderdoseExponent
+                wO += 1.+np.average(dose[self.data.structureVoxels[s]]) ** ptvOverdoseExponent
+                wU += 1.+np.average(dose[self.data.structureVoxels[s]]) ** ptvUnderdoseExponent
             self.structureWeights[self.data.structureNames[s]] = (wU, wO)
 
     def setStructureWeightingFromValues(self, OARU=-1, OARO=-1, PTVU=-1, PTVO=-1,oarExponent=1., ptvOverdoseExponent=1., ptvUnderdoseExponent=1.):
@@ -67,8 +71,13 @@ class predictDose(object):
     def updateThreshAndWeights(self):
         print 'write thresh update function'
 
-    def updateThreshAndWeights(self, sortedRefDose, voxelRedistributionIndices, updateTargetDose=False, targetScalingFactor=0.5):
+    def updateThreshAndWeights(self, sortedRefDose, voxelRedistributionIndices, updateTargetDose=False, targetScalingFactor=0.5, dualThresh=True):
         print 'Updating thresh and weights'
+        voxelThreshOver = None
+        voxelThreshUnder = None
+        if dualThresh:
+            voxelThreshOver = self.voxelThresh.copy()
+            voxelThreshUnder = self.voxelThresh.copy()
         for s in range(self.data.nStructures):
             sReal = self.data.structureNamesInverse[self.data.weightPriorityDict[s]]
 
@@ -86,7 +95,11 @@ class predictDose(object):
                 #keeps PTV the same!
                 if updateTargetDose:
                     #self.voxelThresh[self.data.structureVoxels[sReal]] = np.minimum(sortedRefDose[sReal],self.data.threshDict[self.data.weightPriorityDict[s]]) + targetScalingFactor * np.abs(self.data.threshDict[self.data.weightPriorityDict[s]] - sortedRefDose[sReal])
+
                     self.voxelThresh[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = (1.-targetScalingFactor) * sortedRefDose[sReal] + 1. * targetScalingFactor * self.data.threshDict[self.data.weightPriorityDict[s]]
+                    if dualThresh:
+                        voxelThreshOver[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = np.maximum(self.voxelThresh[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]],  self.data.threshDict[self.data.weightPriorityDict[s]])
+                        voxelThreshUnder[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = np.minimum(self.voxelThresh[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]],  self.data.threshDict[self.data.weightPriorityDict[s]])
                     self.voxelUnderPenalty[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = 1. * self.structureWeights[self.data.structureNames[sReal]][0] / self.data.structureVoxels[
                         sReal].size
                     self.voxelOverPenalty[self.data.structureVoxels[sReal][voxelRedistributionIndices[sReal]]] = 1. * self.structureWeights[self.data.structureNames[sReal]][1] / self.data.structureVoxels[
@@ -101,6 +114,13 @@ class predictDose(object):
         self.data.thresh = self.voxelThresh.copy()
         self.data.underPenalty = self.voxelUnderPenalty.copy()
         self.data.overPenalty = self.voxelOverPenalty.copy()
+        self.data.updateOverUnderThresh(newThreshO=voxelThreshOver, newThreshU=voxelThreshUnder)
+
+
+
+
+
+
 
 class predictDoseDistance(predictDose):
     def __init__(self,dat,refDose):
