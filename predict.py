@@ -32,6 +32,7 @@ class predictDose(object):
 
     def genSortedDosePerStruct(self, doseToSort, destination, sortDirection = 1):
         del destination[:]
+        #print type(doseToSort),len(doseToSort), type(destination)
         for s in range(self.data.nStructures):
             destination.append(np.sort(doseToSort[self.data.structureVoxels[s]])[::sortDirection])
 

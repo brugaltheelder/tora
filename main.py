@@ -7,6 +7,7 @@ d['modelType'] = 'fmo'
 datfmo = data_fmo(d)
 mod_fmo = model_fmo(datfmo)
 mod_fmo.doseindex = 'sourceFMO'
+
 mod_fmo.solve()
 mod_fmo.outputDose()
 mod_fmo.plotDVH()
@@ -16,10 +17,18 @@ doseRef = mod_fmo.finaldose.copy()
 doseRefBase = doseRef.copy()
 dose = None
 
+# tag = 'medBpen'
+# tag = 'highRpen'
+# tag = 'neutral'
+# sio.savemat(mod_fmo.data.workingDir+'refOut_'+tag+'.mat',{'doseRef':doseRef})
+
+
+
+
 for o in range(datfmo.nStructures):
     if datfmo.structureNames[o] not in datfmo.PTVNames:
-        doseRef[datfmo.structureVoxels[o]] *= 1.5
-        print 'structure',datfmo.structureNames[o],'scaled'
+        #doseRef[datfmo.structureVoxels[o]] *= 1.5
+        print 'structure', datfmo.structureNames[o], 'scaled'
 
 
 
@@ -28,9 +37,9 @@ d['comparisonDose'] = doseRef
 d['vmatFlag'] = False
 d['aperLimitFlag'] = 60
 d['basePenalty'] = True
-modstring = "_badRefPenOnBladMEGA_"
-plotBase = True
-
+modstring = "_badRefPenOnBladMEGAfeas_"
+#plotScaled = True
+plotScaled = False
 dat = data_fmo(d)
 predictor2 = predictDoseDistance(dat, doseRef)
 predictor2.genStructureWeightingFromArea()
@@ -43,6 +52,7 @@ mod.outputDose()
 mod.plotDVH()
 mod.pltAllDVH()
 mod.finaldoseDict['baseCase'] = doseRefBase
+mod.finaldoseDict['scaled'] = doseRef
 
 
 n = 5.0
@@ -51,14 +61,15 @@ print exponentList
 for i in range(int(n)):
     dose = mod.finaldose.copy()
     mod.doseindex = str(i).zfill(2)+modstring
-    plotSpecific = ['original'] + [mod.doseindex]
-    if plotBase:
-        plotSpecific += ['baseCase']
+    plotSpecific = ['baseCase'] + [mod.doseindex]
+    if plotScaled:
+        plotSpecific += ['scaled']
     exponent = exponentList[i]
     predictor2.genStructureWeightingFromArea(sourceDose=dose, ptvOverdoseExponent=exponent, ptvUnderdoseExponent=exponent,
                                              oarExponent=exponent)
     newsortingdose = []
     newsortingindices = []
+
     predictor2.genDosePerStruct(dose, newsortingdose)
     predictor2.genSortedIndicesPerStruct(newsortingdose, newsortingindices, sortDirection=-1)
     predictor2.updateThreshAndWeights(predictor2.structureDoseSorted, newsortingindices, updateTargetDose=True,

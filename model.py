@@ -129,6 +129,12 @@ class model(object):
                 lgd = plt.legend(fancybox=True, framealpha=0.5, bbox_to_anchor=(1.05, 1), loc=2)
             count += 1
         plt.title(title)
+        maxDose = 10
+        for s in range(self.data.nStructures):
+            if self.data.structureNames[s] in self.data.PTVNames:
+                if self.data.threshDict[self.data.structureNames[s]]*1.2>maxDose:
+                    maxDose = self.data.threshDict[self.data.structureNames[s]]*1.2
+        plt.axis([0,maxDose,0,1])
         plt.xlabel('Dose')
         plt.ylabel('Fractional Volume')
 
@@ -234,7 +240,7 @@ class model_dao(model):
         self.data.Dkj = np.zeros((self.data.nVox, self.data.aperLimit))
         self.beamUsed = np.zeros(self.data.nBeams, dtype='int32')
         if self.data.comparisonDose is not None:
-            self.finaldoseDict['original'] = self.data.comparisonDose
+            self.finaldoseDict['baseCase'] = self.data.comparisonDose
 
     def solveRMP(self):
 
