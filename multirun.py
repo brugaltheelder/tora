@@ -9,15 +9,19 @@ d['modelType'] = 'fmo'
 # refdosestringtag = 'medBpen'
 # refdosestringtag = 'highBpen'
 # refdosestringtag = 'neutral'
-# refdosestringtag = 'medRpen'
-refdosestringtag = 'highBpen'
+refdosestringtag = 'medRpen'
+# refdosestringtag = 'highRpen'
 
 refdosestring = 'refOut_' + refdosestringtag + '.mat'
+
+
 
 # load reference data
 a = sio.loadmat(d['workingDir'] + refdosestring)
 doseRef = a['doseRef'].flatten()
 print doseRef.shape
+
+refdosestringtag = 'medRpenRbetter100_10'
 
 # set reference dose
 doseRefBase = doseRef.copy()
@@ -26,7 +30,13 @@ doseRefBase = doseRef.copy()
 # dosescalar, penaltyBool, penaltyOAR, penaltyPTV
 doseScalars = [1, 0.8, 1.2, 0.5, 1.5]
 penalty = [(True, 1., 10.), (True, 1., 1.), (True, 0.1, 0.1), (True, 10., 10.), (False, 0., 0.)]
+# penalty = [(True, 10., 1.), (True, 10., 0.1)]
 iterations = [5, 10, 15]
+
+
+# doseScalars = [0.8]
+# penalty=[(True,1.,1.)]
+# iterations = [10]
 
 combinations = list(itertools.product(doseScalars, penalty, iterations))
 
@@ -43,7 +53,8 @@ for runElement in combinations:
     dat = data_fmo(d)
     doseRef = doseRefBase.copy()
     for s in range(dat.nStructures):
-        if dat.structureNames[s] not in dat.PTVNames:
+        # if dat.structureNames[s] not in dat.PTVNames:
+        if dat.structureNames[s] in ['Rectum']:
             doseRef[dat.structureVoxels[s]] *= dScalar
 
     pred = predictDoseDistance(dat, doseRef)
@@ -78,7 +89,7 @@ for runElement in combinations:
         dose = mod.finaldose.copy()
         mod.doseindex = outtag + '_' + str(i).zfill(2)
         exponent = exponentList[i]
-        pred.genStructureWeightingFromArea(sourceDose=dose, ptvOverdoseExponent=exponent, oarExponent=exponent, ptvUnderdoseExponent=exponent)
+        pred.genStructureWeightingFromArea(sourceDose=dose, ptvOverdoseExponent=exponent, oarExponent=exponent, ptvUnderdoseExponent=exponent,scaleDict={'Rectum':100.,'PTV_68':10.,'PTV_56':10.})
 
         newsortingdose = []
         newsortingindices = []

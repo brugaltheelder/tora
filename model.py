@@ -37,11 +37,11 @@ class model(object):
     def solve(self):
         pass
 
-    def quadSolver(self, calcObjGrad, numY, x0, UB=None, display=False, ftol=1e-5):
+    def quadSolver(self, calcObjGrad, numY, x0, UB=None, display=False, ftol=1e-5, gtol=1e-5):
         res = spo.minimize(calcObjGrad, x0=x0, method='L-BFGS-B', jac=True, bounds=[(0, UB) for i in
                                                                                     xrange(
                                                                                         numY)],
-                           options={'ftol': ftol, 'disp': display})
+                           options={'ftol': ftol, 'gtol':gtol, 'disp': display})
         return res['x'], res['fun']
 
     def calcObjGrad(self, yVec):
@@ -161,11 +161,11 @@ class model_fmo(model):
         if self.data.comparisonDose is not None:
             self.finaldoseDict['original'] = self.data.comparisonDose
 
-    def solve(self):
+    def solve(self,ftol=1e-5, gtol=1e-5):
 
         start = time()
 
-        self.fluence, obj = self.quadSolver(self.calcObjGrad, self.data.nBeamlets, self.x0.copy(), display=5)
+        self.fluence, obj = self.quadSolver(self.calcObjGrad, self.data.nBeamlets, self.x0.copy(), display=5, ftol=ftol, gtol=gtol)
 
         # self.res = spo.minimize(self.calcObjGrad, x0=self.x0.copy(), method='L-BFGS-B', jac=True, bounds=[(0, None) for i in
         #                                                                                                   xrange(

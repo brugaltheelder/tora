@@ -36,7 +36,10 @@ d['modelType'] = 'fmo'
 d['comparisonDose'] = doseRef
 d['vmatFlag'] = False
 d['aperLimitFlag'] = 60
-d['basePenalty'] = True
+d['basePenalty'] = False
+
+# d['ptvnames'] = ['BODY','Bladder', 'Lt_femoral_head','Lymph_Nodes','PTV_56','PTV_68','Penile_bulb','Rectum','Rt_femoral_head','prostate_bed']
+
 modstring = "_badRefPenOnBladMEGAfeas_"
 #plotScaled = True
 plotScaled = False
@@ -47,13 +50,23 @@ predictor2.predictDose()
 
 mod = model_fmo(dat)
 mod.doseindex = 'fmo'
+
+# mod.data.thresh = doseRef.copy()
+# mod.data.updateOverUnderThresh()
+# mod.data.overPenalty = np.ones(mod.data.nVox)
+# mod.data.underPenalty = np.ones(mod.data.nVox)
+#
+
+
 mod.solve()
 mod.outputDose()
 mod.plotDVH()
-mod.pltAllDVH()
+mod.pltAllDVH(saveName='asdf')
 mod.finaldoseDict['baseCase'] = doseRefBase
 mod.finaldoseDict['scaled'] = doseRef
 
+
+exit()
 
 n = 5.0
 exponentList = [1. + 1. * (i + 1) / n for i in range(int(n))]
