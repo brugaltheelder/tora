@@ -2,6 +2,38 @@ from data import *
 import scipy.ndimage as spn
 
 
+
+
+
+
+
+
+def genAlphas(dat,PTVBase = 1000., OARBase = 10.,modifier=['default']):
+    # assign bases
+    assert(isinstance(dat,data_fmo))
+
+
+
+    for n in range(dat.nStructures):
+        if dat.structureNames[n] in dat.PTVNames:
+            dat.weightUODict[dat.structureNames[n]] = (4*PTVBase,PTVBase)
+        else:
+            dat.weightUODict[dat.structureNames[n]] = (1.,OARBase)
+
+    # assign modifiers
+
+    if 'PTV' in modifier:
+        for s in dat.PTVNames:
+            dat.weightUODict[s] = (dat.weightUODict[s][0]**2,dat.weightUODict[s][1]**2)
+    if 'Bladder' in modifier:
+        dat.weightUODict['Bladder'] = (dat.weightUODict['Bladder'][0]**2,dat.weightUODict['Bladder'][1]**2)
+    if 'Rectum' in modifier:
+        dat.weightUODict['Rectum'] = (dat.weightUODict['Rectum'][0]**2,dat.weightUODict['Rectum'][1]**2)
+
+    dat.buildPenaltyVectors(dat.underPenalty,dat.overPenalty,dat.thresh)
+
+
+
 class predictDose(object):
     def __init__(self,dat,refDose):
         if isinstance(dat,data):

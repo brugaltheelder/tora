@@ -41,7 +41,7 @@ class model(object):
         res = spo.minimize(calcObjGrad, x0=x0, method='L-BFGS-B', jac=True, bounds=[(0, UB) for i in
                                                                                     xrange(
                                                                                         numY)],
-                           options={'ftol': ftol, 'gtol':gtol, 'disp': display})
+                           options={'ftol': ftol, 'gtol': gtol, 'disp': display})
         return res['x'], res['fun']
 
     def calcObjGrad(self, yVec):
@@ -90,13 +90,11 @@ class model(object):
     def getSaveTag(self):
         return 'WRITESAVETAGFUNCTION'
 
-
-    def getObjUpdateZhat(self,zhat,uT,oT,uW,oW):
-        oDose, uDose = np.array(self.currentDose - oT).clip(0), np.array(self.currentDose - uT).clip(-1e10,0)
-        obj = float(oW.dot(oDose**2)+uW.dot(uDose**2))
-        zhat += np.multiply(oW,oDose) + np.multiply(uW,uDose)
+    def getObjUpdateZhat(self, zhat, uT, oT, uW, oW):
+        oDose, uDose = np.array(self.currentDose - oT).clip(0), np.array(self.currentDose - uT).clip(-1e10, 0)
+        obj = float(oW.dot(oDose ** 2) + uW.dot(uDose ** 2))
+        zhat += np.multiply(oW, oDose) + np.multiply(uW, uDose)
         return obj
-
 
     def pltAllDVH(self, saveName='', plotSpecific=[], saveDVH=True, plotFull=False):
         rainbow = ['r', 'c', 'darkblue', 'maroon', 'black', 'gray', 'g', 'peru', 'yellow', 'salmon', 'cadetblue']
@@ -132,9 +130,9 @@ class model(object):
         maxDose = 10
         for s in range(self.data.nStructures):
             if self.data.structureNames[s] in self.data.PTVNames:
-                if self.data.threshDict[self.data.structureNames[s]]*1.2>maxDose:
-                    maxDose = self.data.threshDict[self.data.structureNames[s]]*1.2
-        plt.axis([0,maxDose,0,1])
+                if self.data.threshDict[self.data.structureNames[s]] * 1.2 > maxDose:
+                    maxDose = self.data.threshDict[self.data.structureNames[s]] * 1.2
+        plt.axis([0, maxDose, 0, 1])
         plt.xlabel('Dose')
         plt.ylabel('Fractional Volume')
 
@@ -161,7 +159,7 @@ class model_fmo(model):
         if self.data.comparisonDose is not None:
             self.finaldoseDict['original'] = self.data.comparisonDose
 
-    def solve(self,ftol=1e-5, gtol=1e-5):
+    def solve(self, ftol=1e-5, gtol=1e-5):
 
         start = time()
 
@@ -197,11 +195,10 @@ class model_fmo(model):
         grad = np.zeros(self.data.nBeamlets)
         zhat = np.zeros(self.data.nVox)
         obj = 0.0
-        obj += self.getObjUpdateZhat(zhat, self.data.underThresh,self.data.overThresh,self.data.underPenalty,self.data.overPenalty)
+        obj += self.getObjUpdateZhat(zhat, self.data.underThresh, self.data.overThresh, self.data.underPenalty, self.data.overPenalty)
 
         if self.data.basePenalty:
-            obj += self.getObjUpdateZhat(zhat, self.data.baseThresh,self.data.baseThresh,self.data.basePenaltyUnder,self.data.basePenaltyOver)
-
+            obj += self.getObjUpdateZhat(zhat, self.data.baseThresh, self.data.baseThresh, self.data.basePenaltyUnder, self.data.basePenaltyOver)
 
         for b in range(self.data.nBeams):
             grad[self.data.nBPBcum[b]:self.data.nBPBcum[b + 1]] = self.data.dijList[b].transpose().dot(zhat)
@@ -214,7 +211,7 @@ class model_fmo(model):
 
     def outputDoseModality(self):
         outputDict = {'obj': self.obj, 'fluence': self.fluence, 'fluencepB': self.fluencepB, 'thresh': self.data.thresh,
-                      'overThresh':self.data.overThresh,'underThresh':self.data.underThresh,
+                      'overThresh': self.data.overThresh, 'underThresh': self.data.underThresh,
                       'over': self.data.overPenalty, 'under': self.data.underPenalty}
         return outputDict
 
@@ -281,8 +278,6 @@ class model_dao(model):
         oDose = np.array(self.currentDose - self.data.overThresh).clip(0)
         uDose = np.array(self.currentDose - self.data.underThresh).clip(-1e10, 0)
 
-
-
         obj = float(self.data.overPenalty.dot(ne.evaluate('oDose ** 2')) + self.data.underPenalty.dot(
             ne.evaluate('uDose ** 2')))
 
@@ -348,7 +343,7 @@ class model_dao(model):
                 self.pricingProblemDAO(self.y[0:self.currentY])
 
             print 'iter:', self.currentY, 'RMP in', rpmTime - start, 's PP in ', time() - rpmTime, ' s with b', \
-            self.bIndexInY[self.currentY], 'with', len(
+                self.bIndexInY[self.currentY], 'with', len(
                 self.yAperBeamlets[self.currentY]), 'beamlets in the aperture and obj', self.objPerIter[-1]
 
             self.currentY += 1
@@ -385,7 +380,7 @@ class model_dao(model):
         # calc helpers
         self.calcDose(yVec)
         oDose, uDose = np.array(self.currentDose - self.data.overThresh), np.array(self.currentDose - self.data.underThresh)
-        #oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
+        # oDose, uDose = np.array(self.currentDose - self.data.thresh), np.array(self.currentDose - self.data.thresh)
 
         zhat = np.multiply(self.data.overPenalty, oDose.clip(0)) + np.multiply(self.data.underPenalty,
                                                                                uDose.clip(-1e10, 0))
@@ -542,6 +537,6 @@ class model_dao(model):
 
     def outputDoseModality(self):
         outputDict = {'obj': self.obj, 'y': self.y, 'beamlets': self.yAperBeamlets, 'thresh': self.data.thresh,
-                      'overThresh':self.data.overThresh,'underThresh':self.data.underThresh,
+                      'overThresh': self.data.overThresh, 'underThresh': self.data.underThresh,
                       'over': self.data.overPenalty, 'under': self.data.underPenalty}
         return outputDict

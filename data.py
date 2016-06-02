@@ -91,28 +91,7 @@ class data(object):
         self.overPenalty = np.zeros(self.nVox, dtype='float64')
         self.thresh = np.zeros(self.nVox, dtype='float64')
 
-        for s in range(self.nStructures):
-            if self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]].size > 0:
-                self.underPenalty[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
-                                                                                                                  self.weightUODict[
-                                                                                                                      self.weightPriorityDict[
-                                                                                                                          s]][
-                                                                                                                      0] / \
-                                                                                                                  self.structureVoxels[
-                                                                                                                      self.structureNamesInverse[
-                                                                                                                          self.weightPriorityDict[
-                                                                                                                              s]]].size
-                self.overPenalty[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
-                                                                                                                 self.weightUODict[
-                                                                                                                     self.weightPriorityDict[
-                                                                                                                         s]][
-                                                                                                                     1] / \
-                                                                                                                 self.structureVoxels[
-                                                                                                                     self.structureNamesInverse[
-                                                                                                                         self.weightPriorityDict[
-                                                                                                                             s]]].size
-                self.thresh[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = \
-                    self.threshDict[self.weightPriorityDict[s]]
+        self.buildPenaltyVectors(self.underPenalty, self.overPenalty, self.thresh)
 
         if dataDict['threshOverride'] is not None:
             self.thresh = dataDict['threshOverride']
@@ -155,6 +134,31 @@ class data(object):
 
         # read in modality part
         self.readInModalityData(dataDict)
+
+    def buildPenaltyVectors(self,uP,oP,thresh):
+
+        for s in range(self.nStructures):
+            if self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]].size > 0:
+                uP[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
+                                                                                                                  self.weightUODict[
+                                                                                                                      self.weightPriorityDict[
+                                                                                                                          s]][
+                                                                                                                      0] / \
+                                                                                                                  self.structureVoxels[
+                                                                                                                      self.structureNamesInverse[
+                                                                                                                          self.weightPriorityDict[
+                                                                                                                              s]]].size
+                oP[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
+                                                                                                                 self.weightUODict[
+                                                                                                                     self.weightPriorityDict[
+                                                                                                                         s]][
+                                                                                                                     1] / \
+                                                                                                                 self.structureVoxels[
+                                                                                                                     self.structureNamesInverse[
+                                                                                                                         self.weightPriorityDict[
+                                                                                                                             s]]].size
+                thresh[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = \
+                    self.threshDict[self.weightPriorityDict[s]]
 
     def buildBasePenaltyVectors(self, oarWeight=None, ptvWeight=None):
         if oarWeight is None:
