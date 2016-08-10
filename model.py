@@ -96,9 +96,10 @@ class model(object):
         zhat += np.multiply(oW, oDose) + np.multiply(uW, uDose)
         return obj
 
-    def pltAllDVH(self, saveName='', plotSpecific=[], saveDVH=True, plotFull=False):
+    def pltAllDVH(self, saveName='', plotSpecific=[], saveDVH=True, plotFull=False, titleOverride=None):
         rainbow = ['r', 'c', 'darkblue', 'maroon', 'black', 'gray', 'g', 'peru', 'yellow', 'salmon', 'cadetblue']
         styles = ['solid', 'dashed', 'dotted', 'dashdot']
+        # styles = ['dashed','solid', 'dotted', 'dashdot']
         plt.clf()
         title = ''
         count, lgd = 0, None
@@ -108,7 +109,10 @@ class model(object):
                 continue
 
             dose = DoseDist[:]
-            title = title + 'DI: ' + doseIndex + ' - ' + styles[count % len(styles)] + ' | '
+            if titleOverride is not None:
+                title = titleOverride
+            else:
+                title = title + 'DI: ' + doseIndex + ' - ' + styles[count % len(styles)] + ' | '
 
             for s in range(self.data.nStructures):
 

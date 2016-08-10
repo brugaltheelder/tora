@@ -4,6 +4,15 @@ from predict import *
 from datainputs import *
 import itertools
 
+import pickle
+
+
+
+def evaluate_Gamma(refDose,predDose):
+    return 0
+
+
+
 
 
 print 'Running spatial DVH file'
@@ -15,7 +24,7 @@ d['modelType'] = 'fmo'
 
 # build list of methods
 
-spatialSortingMethods = ['distance']
+spatialSortingMethods = ['distanceToPTV']
 
 
 # build name of run options
@@ -45,9 +54,10 @@ print "reference dose tag:", refdosestringtag
 print "generating data"
 dat = data_fmo(d)
 
+
+
 #generate alphas for dose distribution
 genAlphas(dat,PTVBase=1000000.,OARBase=1.,modifier=['Bladder'])
-
 
 
 #find ground truth dose distribution (solve FMO)
@@ -67,15 +77,39 @@ doseRefGT = mod_fmo_GT.finaldose.copy()
 
 
 for m in range(len(spatialSortingMethods)):
-    pass
+
+
+    pred = None
+    predDose = np.zeros(dat.nVox)
     # build predictor object
-
-
-    # read in ground truth dose
-
-
     # evaluate method spatialSortingMethods[m]
 
+    if spatialSortingMethods[m]=='distanceToPTV':
+        pred=predictDoseDistance(dat,doseRefGT)
+        pred.predictDose(savePredDose=True,updateWeights=False)
+        predDose = pred.predDoseVector.copy()
+
+    elif spatialSortingMethods[m]=='default':
+        print 'put in a real value'
+    else:
+        print 'no predictor found'
+
+
+    doseRefGT3D = np.zeros(dat.nVoxFull)
+    doseRefGT3D[dat.voxelIndicesInTrunc] = doseRefGT
+    doseRefGT3D = doseRefGT3D.reshape(dat.voxDim,order='F').copy()
+    predRefGT3D = np.zeros(dat.nVoxFull)
+    predRefGT3D[dat.voxelIndicesInTrunc] = predDose
+    predRefGT3D = doseRefGT3D.reshape(dat.voxDim,order='F').copy()
+
+
+
+    dDict = {'ref':doseRefGT3D,'pred':predRefGT3D }
+    pFile = open('predDoseOut.pkl','w')
+    pickle.dump(dDict,pFile)
+    pFile.close()
+    # evalOutputValue, evalOutputVector = pred.evalDoses(doseRefGT, predDose,type='gamma')
+    # print evalOutputValue, evalOutputVector
 
     # evaluate comparisons for the dose
 

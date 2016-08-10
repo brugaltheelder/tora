@@ -13,6 +13,7 @@ class data(object):
         self.beamNumbers = dataDict['beams'][:]
         self.nBeams = dataDict['nbeams']
         self.voxSamplingSizes = dataDict['voxSampling'][:]
+        self.zSamplingScale = dataDict['zSamplingScale']
         self.voxDim = dataDict['voxDim']
         self.PTVNames = dataDict['ptvnames']
         self.aperLimit = dataDict['aperLimitFlag'] or self.nBeams

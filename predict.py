@@ -1,4 +1,5 @@
 from data import *
+import operator
 import scipy.ndimage as spn
 
 
@@ -36,11 +37,11 @@ def genAlphas(dat,PTVBase = 1000., OARBase = 10.,modifier=['default']):
 
 class predictDose(object):
     def __init__(self,dat,refDose):
-        if isinstance(dat,data):
+        if isinstance(dat, data):
             self.data = dat
         else:
             print 'data type wrong'
-        self.refDose = refDose
+        self.refDose = refDose.copy()
         self.predictedDose = np.ones(self.data.nVox)
         self.structureWeights = {}
         for s in range(self.data.nStructures):
@@ -49,6 +50,17 @@ class predictDose(object):
         self.voxelThresh = self.data.thresh.copy()
         self.voxelOverPenalty = self.data.overPenalty.copy()
         self.voxelUnderPenalty = self.data.underPenalty.copy()
+        self.xDim = self.data.voxDim[0]
+        self.yDim = self.data.voxDim[1]
+        self.zDim = self.data.voxDim[2]
+        self.relPositionFull = np.zeros((self.data.nVoxFull,),dtype=[('xdim','f8'),('ydim','f8'),('zdim','f8')])
+        self.relPositionFull3D = self.relPositionFull.reshape(self.data.voxDim,order='F').copy()
+        for index,value in np.ndenumerate(self.relPositionFull3D):
+            self.relPositionFull3D[index] = (self.xDim * index[0], self.yDim * index[1], self.zDim * index[2])
+        self.relPositionFull = self.relPositionFull3D.flatten(order = 'F').copy()
+        self.relPosition = self.relPositionFull[self.data.voxelIndicesInFull]
+
+
         self.sortedStructureIndices = []
         self.refDosePerStruct = []
 
@@ -158,6 +170,29 @@ class predictDose(object):
         self.data.overPenalty = self.voxelOverPenalty.copy()
         self.data.updateOverUnderThresh(newThreshO=voxelThreshOver, newThreshU=voxelThreshUnder)
 
+    def evalDoses(self,refDose,predDose,type='gamma', doseNormalizationScalarGamma = 1.03, distanceNormalizationScalarGamma = 0.3):
+        comparisonValue = -1.
+        comparisonVector = np.zeros(self.data.nVox)
+        if type=='gamma':
+            doseNorm = doseNormalizationScalarGamma * max([v for k,v in self.data.threshDict.iteritems()])
+
+            for j in range(self.data.nVox):
+                minValue = 999999999.
+                doseDiff = np.zeros(self.data.nVox)
+                distDiff = np.zeros(self.data.nVox)
+                doseDiff = (predDose[j] - refDose)**2
+                pos = self.relPosition[j]
+                distDiff = (pos[0]-self.relPosition['xdim'])**2 + (pos[1]-self.relPosition['ydim'])**2 + (pos[2]-self.relPosition['zdim'])**2
+
+                comparisonVector[j] = np.min(np.sqrt(doseDiff/doseNorm + distDiff/distanceNormalizationScalarGamma))
+            comparisonValue = np.sum(comparisonVector)
+        elif type =='squaredError':
+            pass
+        elif type =='sortingDistance':
+            pass
+
+        return comparisonValue, comparisonVector
+
 
 
 
@@ -166,11 +201,10 @@ class predictDose(object):
 
 class predictDoseDistance(predictDose):
     def __init__(self,dat,refDose):
-        super(predictDoseDistance,self).__init__(dat,refDose)
+        super(predictDoseDistance, self).__init__(dat,refDose)
 
-        self.xDim = self.data.voxDim[0]
-        self.yDim = self.data.voxDim[1]
-        self.zDim = self.data.voxDim[2]
+
+        self.voxelSampling = [self.xDim,self.yDim,self.zDim * self.data.zSamplingScale]
         self.distancesGrid = None
         self.distancesFull = np.zeros(self.data.nVoxFull)
         self.distances = np.zeros(self.data.nVox)
@@ -178,15 +212,21 @@ class predictDoseDistance(predictDose):
         self.structureDistancesSortedIndices = []
         self.structureDistances = []
         self.structureDoseSorted = []
+        self.predDoseVector = None
 
-    def predictDose(self):
+    def predictDose(self, savePredDose=False, updateWeights = True):
         self.buildMask()
         self.calcAndSortDistances()
 
         self.genDosePerStruct(self.distances, self.structureDistances)
         self.genSortedIndicesPerStruct(self.structureDistances, self.structureDistancesSortedIndices,sortDirection = 1)
         self.genSortedDosePerStruct(self.refDose, self.structureDoseSorted,sortDirection=-1)
-        self.updateThreshAndWeights(self.structureDoseSorted,self.structureDistancesSortedIndices)
+        if updateWeights:
+            self.updateThreshAndWeights(self.structureDoseSorted, self.structureDistancesSortedIndices)
+        if savePredDose:
+            self.predDoseVector = np.zeros(self.data.nVox)
+            for s in range(self.data.nStructures):
+                self.predDoseVector[self.data.structureVoxels[s]] += self.structureDoseSorted[s]
 
     def buildMask(self):
         self.distanceMask = np.ones(self.data.nVoxFull)
@@ -195,33 +235,6 @@ class predictDoseDistance(predictDose):
         self.distanceMask = self.distanceMask.reshape(self.data.voxDim, order='F')
 
     def calcAndSortDistances(self):
-        self.distancesGrid = spn.distance_transform_edt(self.distanceMask, sampling=self.data.voxSamplingSizes[:])
+        self.distancesGrid = spn.distance_transform_edt(self.distanceMask, sampling=self.voxelSampling[:])
         self.distancesFull = self.distancesGrid.flatten(order='F').copy()
         self.distances = self.distancesFull[self.data.voxelIndicesInFull]
-
-    # def updateThreshAndWeights(self,updateTargetDose=False, targetScalingFactor=0.5):
-    #     print 'Updating thresh and weights'
-    #     for s in range(self.data.nStructures):
-    #         sReal = self.data.structureNamesInverse[self.data.weightPriorityDict[s]]
-    #
-    #         if (self.data.structureNames[sReal] not in set(self.data.PTVNames)) and self.data.structureVoxels[sReal].size > 0:
-    #             print 'OAR: ',self.data.structureNames[sReal]
-    #             self.voxelThresh[self.data.structureVoxels[sReal][self.structureDistancesSortedIndices[sReal]]] = self.structureDoseSorted[sReal]
-    #
-    #             self.voxelUnderPenalty[self.data.structureVoxels[sReal][self.structureDistancesSortedIndices[sReal]]] = 1. * self.structureWeights[self.data.structureNames[sReal]][0] / \
-    #                                                                                                 self.data.structureVoxels[
-    #                                                                                                         sReal].size
-    #             self.voxelOverPenalty[self.data.structureVoxels[sReal][self.structureDistancesSortedIndices[sReal]]] = 1. * self.structureWeights[self.data.structureNames[sReal]][1] / self.data.structureVoxels[
-    #                 sReal].size
-    #
-    #         elif self.data.structureVoxels[sReal].size>0:
-    #             #keeps PTV the same!
-    #             self.voxelThresh[self.data.structureVoxels[sReal]] = self.data.threshDict[self.data.weightPriorityDict[s]]
-    #             self.voxelUnderPenalty[self.data.structureVoxels[sReal]] = 1. * self.structureWeights[self.data.structureNames[sReal]][0] / self.data.structureVoxels[
-    #                 sReal].size
-    #             self.voxelOverPenalty[self.data.structureVoxels[sReal]] = 1. * self.structureWeights[self.data.structureNames[sReal]][1] / self.data.structureVoxels[
-    #                 sReal].size
-    #
-    #     self.data.thresh = self.voxelThresh.copy()
-    #     self.data.underPenalty = self.voxelUnderPenalty.copy()
-    #     self.data.overPenalty = self.voxelOverPenalty.copy()

@@ -32,8 +32,9 @@ threshDict = {'BODY': 0.,
               'prostate_bed': 0.}
 
 voxDimTup = (184, 184, 90)
-# voxSampling =[0.300338,0.300338,0.25]
-voxSampling = [0.300338, 0.300338, 2.5]
+voxSampling =[0.300338,0.300338,0.25]
+zScale = 10.
+#voxSampling = [0.300338, 0.300338, 2.5]
 # voxSampling =[0.300338,0.300338,4]
 vmatColStep = 1.0
 vmatRowStep = 1.0
@@ -59,7 +60,7 @@ aperLimitFlag = None
 useGPUFlag = False
 
 d = {'modelType': 'fmo', 'weightUnderOverDict': weightUnderOverDict, 'weightPriorityDict': weightPriorityDict,
-     'threshDict': threshDict, 'voxDim': voxDimTup, 'leafDistPerDeg': leafDistPerDeg, 'vmatColStep': vmatColStep,'voxSampling':voxSampling,
+     'threshDict': threshDict, 'voxDim': voxDimTup, 'leafDistPerDeg': leafDistPerDeg, 'vmatColStep': vmatColStep,'voxSampling':voxSampling,'zSamplingScale':zScale,
      'vmatRowStep': vmatRowStep, 'nbeams':nbeams, 'dataDir':dataDir, 'workingDir':workingDir, 'beams':beams, 'ptvnames':ptvnames,
      'vmatFlag':vmatFlag, 'aperLimitFlag':aperLimitFlag, 'threshOverride':None, 'overWOverride':None, 'underWOverride':None,'comparisonDose':None,'useGPU':useGPUFlag, 'dualThresh':True}
 
