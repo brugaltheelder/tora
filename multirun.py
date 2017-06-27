@@ -50,6 +50,7 @@ penalty = [(True, 1., 1.)]
 iterations = [10]
 
 
+
 # doseScalars = [0.8]
 # penalty=[(True,1.,1.)]
 # iterations = [10]
@@ -124,6 +125,8 @@ for runElement in combinations:
         else:
             plotSpecific = [mod.doseindex] + ['baseCase']
         mod.pltAllDVH(saveName=mod.doseindex, plotSpecific=plotSpecific, titleOverride='Solid = Reference DVH, Dashed = Auto-planned DVH')
+
+
 
     mod.outputDose()
 

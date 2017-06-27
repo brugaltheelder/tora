@@ -6,12 +6,19 @@ from datainputs import *
 d['modelType'] = 'fmo'
 datfmo = data_fmo(d)
 mod_fmo = model_fmo(datfmo)
-mod_fmo.doseindex = 'sourceFMO'
+mod_fmo.doseindex = 'paperFMO_rectum'
+
+
+dontPlot = ['SMASMV','entrance','duodenum','DoseFalloff','CTV','GTV','Celiac']
 
 mod_fmo.solve()
 mod_fmo.outputDose()
 mod_fmo.plotDVH()
-mod_fmo.pltAllDVH()
+mod_fmo.pltAllDVH(saveName=mod_fmo.doseindex,doNotPlotTheseStructures=dontPlot)
+mod_fmo.pltAllDVH(saveName=mod_fmo.doseindex+'full',doNotPlotTheseStructures=dontPlot, plotFull=True)
+
+
+exit()
 
 doseRef = mod_fmo.finaldose.copy()
 doseRefBase = doseRef.copy()

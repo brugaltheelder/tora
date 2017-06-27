@@ -1,6 +1,8 @@
 from data import *
 import operator
 import scipy.ndimage as spn
+from npgamma import *
+import matplotlib.pyplot as plt
 
 
 
@@ -32,6 +34,7 @@ def genAlphas(dat,PTVBase = 1000., OARBase = 10.,modifier=['default']):
         dat.weightUODict['Rectum'] = (dat.weightUODict['Rectum'][0]**2,dat.weightUODict['Rectum'][1]**2)
 
     dat.buildPenaltyVectors(dat.underPenalty,dat.overPenalty,dat.thresh)
+
 
 
 
@@ -93,7 +96,6 @@ class predictDose(object):
             valueScalar = 1.
             if self.data.structureNames[s] in scaleDict.keys():
                 valueScalar = scaleDict[self.data.structureNames[s]]
-
             wO, wU = 0., 0.
             if self.data.structureNames[s] not in set(self.data.PTVNames) and self.data.structureVoxels[s].size >0:
                 wO += ( 1.+np.average(dose[self.data.structureVoxels[s]]) ** oarExponent ) * valueScalar
@@ -102,7 +104,7 @@ class predictDose(object):
                 wU += (1.+np.average(dose[self.data.structureVoxels[s]]) ** ptvUnderdoseExponent) * valueScalar
             self.structureWeights[self.data.structureNames[s]] = (wU, wO)
 
-    def setStructureWeightingFromValues(self, OARU=-1, OARO=-1, PTVU=-1, PTVO=-1,oarExponent=1., ptvOverdoseExponent=1., ptvUnderdoseExponent=1.):
+    def setStructureWeightingFromValues(self, OARU=-1, OARO=-1, PTVU=-1, PTVO=-1,oarExponent=1., ptvOverdoseExponent=1., ptvUnderdoseExponent=1., overrideWeightScalar=1., overrideWeightStructureName=None):
         for s in range(self.data.nStructures):
             wO, wU = 0., 0.
             if self.data.structureNames[s] not in set(self.data.PTVNames) and self.data.structureVoxels[s].size > 0:
@@ -110,6 +112,11 @@ class predictDose(object):
             elif self.data.structureVoxels[s].size>0:
                 wO = PTVO ** ptvOverdoseExponent
                 wU = PTVU ** ptvUnderdoseExponent
+
+            if overrideWeightStructureName == self.data.structureNames[s]:
+                wO = wO * overrideWeightScalar
+                wU = wU * overrideWeightScalar
+
             self.structureWeights[self.data.structureNames[s]] = (wU, wO)
 
     def setStructureWeightingFromDict(self,specificWeights={}):
@@ -117,10 +124,16 @@ class predictDose(object):
             if self.data.structureNames[s] in specificWeights:
                 self.structureWeights[s] = specificWeights[self.data.structureNames[s]]
 
+    def getSpatialGrid(self):
+        xcoords = [1.0*i*self.data.voxSamplingSizes[0] for i in range(self.data.voxDim[0])]
+        ycoords = [1.0*i*self.data.voxSamplingSizes[1] for i in range(self.data.voxDim[1])]
+        zcoords = [1.0*i*self.data.voxSamplingSizes[2] for i in range(self.data.voxDim[2])]
+        return np.array(xcoords), np.array(ycoords), np.array(zcoords)
+
     def updateThreshAndWeights(self):
         print 'write thresh update function'
 
-    def updateThreshAndWeights(self, sortedRefDose, voxelRedistributionIndices, updateTargetDose=False, targetScalingFactor=0.5, dualThresh=True, scaleDict = {}):
+    def updateThreshAndWeights(self, sortedRefDose, voxelRedistributionIndices, updateTargetDose=False, targetScalingFactor=0.5, dualThresh=True, scaleDict = {}, updateWeights=False):
         print 'Updating thresh and weights'
         voxelThreshOver = None
         voxelThreshUnder = None
@@ -166,32 +179,77 @@ class predictDose(object):
                         sReal].size * valueScalar
 
         self.data.thresh = self.voxelThresh.copy()
-        self.data.underPenalty = self.voxelUnderPenalty.copy()
-        self.data.overPenalty = self.voxelOverPenalty.copy()
+        if updateWeights:
+            self.data.underPenalty = self.voxelUnderPenalty.copy()
+            self.data.overPenalty = self.voxelOverPenalty.copy()
         self.data.updateOverUnderThresh(newThreshO=voxelThreshOver, newThreshU=voxelThreshUnder)
 
-    def evalDoses(self,refDose,predDose,type='gamma', doseNormalizationScalarGamma = 1.03, distanceNormalizationScalarGamma = 0.3):
+
+
+    def evalDoses(self,refDose,predDose,type='gamma',
+                  gammaPrefsDict = {'distThresh':3.,'doseThreshScalar':0.03,'lowerDoseThreshScalar':0.2,'maxTestDistScalar':2.}):
         comparisonValue = -1.
         comparisonVector = np.zeros(self.data.nVox)
         if type=='gamma':
-            doseNorm = doseNormalizationScalarGamma * max([v for k,v in self.data.threshDict.iteritems()])
+            # get metadata
+            ref3D = np.zeros(self.data.nVoxFull)
+            ref3D[self.data.voxelIndicesInFull] = refDose
+            ref3D = ref3D.reshape(self.data.voxDim, order='F').copy()
+            pred3D = np.zeros(self.data.nVoxFull)
+            pred3D[self.data.voxelIndicesInFull] = predDose
+            pred3D = pred3D.reshape(self.data.voxDim, order='F').copy()
+            coords = self.getSpatialGrid()
+            gamma = calc_gamma(coords,ref3D,coords,pred3D,gammaPrefsDict['distThresh'],
+                               gammaPrefsDict['doseThreshScalar'] * np.max(ref3D),
+                               lower_dose_cutoff=gammaPrefsDict['lowerDoseThreshScalar'] * np.max(pred3D),
+                               distance_step_size=gammaPrefsDict['distThresh']/10.,
+                               maximum_test_distance=2. * gammaPrefsDict['distThresh'])
+            valid_gamma = np.zeros(self.data.nVoxFull).reshape(self.data.voxDim)
+            valid_gamma[~np.isinf(gamma)] = gamma[~np.isinf(gamma)]
+            return sum(valid_gamma),valid_gamma
 
-            for j in range(self.data.nVox):
-                minValue = 999999999.
-                doseDiff = np.zeros(self.data.nVox)
-                distDiff = np.zeros(self.data.nVox)
-                doseDiff = (predDose[j] - refDose)**2
-                pos = self.relPosition[j]
-                distDiff = (pos[0]-self.relPosition['xdim'])**2 + (pos[1]-self.relPosition['ydim'])**2 + (pos[2]-self.relPosition['zdim'])**2
 
-                comparisonVector[j] = np.min(np.sqrt(doseDiff/doseNorm + distDiff/distanceNormalizationScalarGamma))
-            comparisonValue = np.sum(comparisonVector)
         elif type =='squaredError':
             pass
         elif type =='sortingDistance':
             pass
 
         return comparisonValue, comparisonVector
+
+
+    def plotSlice(self,gamma,coords,doseRef, dosePred, slice):
+        max_ref_dose = np.max(doseRef)
+        xc, yc, zc = coords
+        cut_off_gamma = gamma.copy()
+        greater_than_2_ref = (cut_off_gamma > 2.) & ~np.isinf(gamma)
+        cut_off_gamma[greater_than_2_ref] = 2.
+        z_i = zc[slice]
+
+
+
+        print("Slice = {0}".format(z_i))
+
+        plt.contourf(
+            xc, yc, dosePred[:, :, slice], 30,
+            vmin=0, vmax=max_ref_dose, cmap=plt.get_cmap('gist_heat'))
+        plt.title("Predicted")
+        plt.colorbar()
+        plt.show()
+
+        plt.contourf(
+            xc, yc, doseRef[:, :, slice], 30,
+            vmin=0, vmax=max_ref_dose, cmap=plt.get_cmap('gist_heat'))
+        plt.title("Reference")
+        plt.colorbar()
+        plt.show()
+
+        plt.contourf(
+            xc, yc, cut_off_gamma[:, :, slice], 30,
+            vmin=0, vmax=2, cmap=plt.get_cmap('bwr'))
+        plt.title("Gamma")
+        plt.colorbar()
+        plt.show()
+
 
 
 
@@ -220,19 +278,25 @@ class predictDoseDistance(predictDose):
 
         self.genDosePerStruct(self.distances, self.structureDistances)
         self.genSortedIndicesPerStruct(self.structureDistances, self.structureDistancesSortedIndices,sortDirection = 1)
-        self.genSortedDosePerStruct(self.refDose, self.structureDoseSorted,sortDirection=-1)
+        self.genSortedDosePerStruct(self.refDose, self.structureDoseSorted, sortDirection=-1)
         if updateWeights:
             self.updateThreshAndWeights(self.structureDoseSorted, self.structureDistancesSortedIndices)
         if savePredDose:
             self.predDoseVector = np.zeros(self.data.nVox)
             for s in range(self.data.nStructures):
-                self.predDoseVector[self.data.structureVoxels[s]] += self.structureDoseSorted[s]
+                # with prioritization
+                sReal = self.data.structureNamesInverse[self.data.weightPriorityDict[s]]
+                self.predDoseVector[self.data.structureVoxels[sReal]] = self.structureDoseSorted[sReal]
+                # no prioritization
+                # self.predDoseVector[self.data.structureVoxels[s]] += self.structureDoseSorted[s]
 
     def buildMask(self):
         self.distanceMask = np.ones(self.data.nVoxFull)
         for pname in self.data.PTVNames:
             self.distanceMask[self.data.structureVoxelsFull[self.data.structureNamesInverse[pname]]] = 0
         self.distanceMask = self.distanceMask.reshape(self.data.voxDim, order='F')
+
+
 
     def calcAndSortDistances(self):
         self.distancesGrid = spn.distance_transform_edt(self.distanceMask, sampling=self.voxelSampling[:])

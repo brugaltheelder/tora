@@ -96,41 +96,64 @@ class model(object):
         zhat += np.multiply(oW, oDose) + np.multiply(uW, uDose)
         return obj
 
-    def pltAllDVH(self, saveName='', plotSpecific=[], saveDVH=True, plotFull=False, titleOverride=None):
-        rainbow = ['r', 'c', 'darkblue', 'maroon', 'black', 'gray', 'g', 'peru', 'yellow', 'salmon', 'cadetblue']
-        styles = ['solid', 'dashed', 'dotted', 'dashdot']
+    def pltAllDVH(self, saveName='', plotSpecific=[], saveDVH=True, plotFull=False, titleOverride=None, doNotPlotTheseStructures=[], plotTitle=True):
+        rainbow = ['r', 'c', 'darkblue', 'maroon', 'black', 'gray', 'g', 'peru', 'cadetblue','yellow', 'salmon']
+        styles = ['solid', 'dashdot', 'dashed', 'dotted']
+
         # styles = ['dashed','solid', 'dotted', 'dashdot']
         plt.clf()
         title = ''
         count, lgd = 0, None
+        stycount = 0
 
         for doseIndex, DoseDist in sorted(self.finaldoseDict.iteritems()):
+            print 'plotting',doseIndex,
             if len(plotSpecific) > 0 and doseIndex not in set(plotSpecific):
+                print 'nope'
                 continue
+            else:
+                print 'yup'
+
+            if doseIndex =='scaled':
+                sty = 'dotted'
+            elif doseIndex == 'baseCase':
+                sty = 'dashed'
+            else:
+                sty = styles[stycount % len(styles)]
+                stycount += 1
 
             dose = DoseDist[:]
             if titleOverride is not None:
-                title = titleOverride
+                title = titleOverride    
             else:
-                title = title + 'DI: ' + doseIndex + ' - ' + styles[count % len(styles)] + ' | '
+                title = title + 'DI: ' + doseIndex + ' - ' + sty + ' | '
+
+
 
             for s in range(self.data.nStructures):
-
+                plotThisStruct = plotFull
                 if self.data.structureVoxels[s].shape[0] > 0:
-                    doseindices = None
+                    plotThisStruct = True
+
+                if plotThisStruct and self.data.structureNames[s] not in set(doNotPlotTheseStructures):
+                    doseindices = self.data.structureVoxels[s]
+                    dvhScalar = float(self.data.structureVoxels[s].shape[0])
                     if plotFull:
                         doseindices = self.data.structureVoxelsOverlap[s]
-                    else:
-                        doseindices = self.data.structureVoxels[s]
+                        dvhScalar = float(self.data.structureVoxelsOverlap[s].shape[0])
+                        print 'plotfullDVHscalar',dvhScalar,'for structure',self.data.structureNames[s]
+
+
 
                     hist, bins = np.histogram(dose[doseindices], bins=100)
-                    dvh = 1. - np.cumsum(hist) / float(self.data.structureVoxels[s].shape[0])
+                    dvh = 1. - np.cumsum(hist) / dvhScalar
                     plt.plot(bins[:-1], dvh, label=self.data.structureNames[s], color=rainbow[s % len(rainbow)],
-                             linestyle=styles[count % len(styles)], linewidth=2)
+                             linestyle=sty, linewidth=2)
             if count == 0:
                 lgd = plt.legend(fancybox=True, framealpha=0.5, bbox_to_anchor=(1.05, 1), loc=2)
             count += 1
-        plt.title(title)
+        if plotTitle:
+            plt.title(title)
         maxDose = 10
         for s in range(self.data.nStructures):
             if self.data.structureNames[s] in self.data.PTVNames:
@@ -143,6 +166,8 @@ class model(object):
         if len(saveName) > 1 or saveDVH:
             saveTag = self.getSaveTag()
             plt.savefig(self.data.workingDir + 'dvh_all_' + saveName + '_' + saveTag + '.png',
+                        bbox_extra_artists=(lgd,), bbox_inches='tight')
+            plt.savefig(self.data.workingDir + 'dvh_all_' + saveName + '_' + saveTag + '.eps',
                         bbox_extra_artists=(lgd,), bbox_inches='tight')
         if self.showPlots:
             plt.show()
@@ -194,6 +219,7 @@ class model_fmo(model):
         # obj = float(
         #     self.data.overPenalty.dot(oDose.clip(0) ** 2) + self.data.underPenalty.dot(uDose.clip(-1e10, 0) ** 2))
         #
+
         # zhat = np.multiply(self.data.overPenalty, oDose.clip(0)) + np.multiply(self.data.underPenalty,
         #                                                                        uDose.clip(-1e10, 0))
         grad = np.zeros(self.data.nBeamlets)

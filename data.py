@@ -11,6 +11,7 @@ class data(object):
         self.workingDir = dataDict['workingDir']
         self.dataDir = dataDict['dataDir']
         self.beamNumbers = dataDict['beams'][:]
+        self.beamNumbersC = dataDict['beamsC'][:]
         self.nBeams = dataDict['nbeams']
         self.voxSamplingSizes = dataDict['voxSampling'][:]
         self.zSamplingScale = dataDict['zSamplingScale']
@@ -32,7 +33,7 @@ class data(object):
                 voiFilenameList.append(file)
         self.nStructures = len(voiFilenameList)
 
-        initialMat = sio.loadmat(self.dataDir + 'Gantry' + str(self.beamNumbers[0]) + '_Couch0_D.mat')
+        initialMat = sio.loadmat(self.dataDir + 'Gantry' + str(self.beamNumbers[0]) + '_Couch'+ str(self.beamNumbersC[0]) + '_D.mat')
         self.nVoxFull = initialMat['D'].shape[0]
 
         onesWhereVoxels = np.zeros(self.nVoxFull, dtype='int64')
@@ -50,9 +51,10 @@ class data(object):
 
         # read in beams
         self.dijList = []
-        for b in self.beamNumbers:
-            print 'reading in beam', b
-            dMat = sio.loadmat(self.dataDir + 'Gantry' + str(b) + '_Couch0_D.mat')
+        for b in range(len(self.beamNumbers)):
+            print 'reading in beam', self.beamNumbers[b],',',self.beamNumbersC[b]
+            #dMat = sio.loadmat(self.dataDir + 'Gantry' + str(b) + '_Couch0_D.mat')
+            dMat = sio.loadmat(self.dataDir + 'Gantry' + str(self.beamNumbers[b]) + '_Couch'+ str(self.beamNumbersC[b]) + '_D.mat')
             d = sps.csc_matrix(dMat['D'][self.voxelIndicesInFull, :])
             self.nBeamlets += d.shape[1]
             self.nBPB.append(d.shape[1])
@@ -121,7 +123,8 @@ class data(object):
             self.basePenalty = dataDict['basePenalty']
 
         if 'basePenaltyWeightOAR' not in dataDict.keys():
-            self.basePenaltyWeightOAR = 1.
+            print 'overwriting basePenaltyWeightOAR'
+            self.basePenaltyWeightOAR = 0.1
         else:
             self.basePenaltyWeightOAR = dataDict['basePenaltyWeightOAR']
 
@@ -161,7 +164,7 @@ class data(object):
                 thresh[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = \
                     self.threshDict[self.weightPriorityDict[s]]
 
-    def buildBasePenaltyVectors(self, oarWeight=None, ptvWeight=None):
+    def buildBasePenaltyVectors(self, oarWeight=None, ptvWeight=None, doseScalar=None, overrideWeightScalar = 1.0, overrideWeightStructureName = None):
         if oarWeight is None:
             oarWeight = self.basePenaltyWeightOAR
         if ptvWeight is None:
@@ -173,8 +176,28 @@ class data(object):
             if self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]].size > 0:
                 # IF STRUCTURE IS OAR THEN USE OAR PENALTY, O/W USE TARGET
                 over, under = oarWeight, oarWeight
+
+
                 if self.structureNamesInverse[self.weightPriorityDict[s]] in self.PTVNames:
                     over, under = ptvWeight, ptvWeight
+
+
+
+                if doseScalar is not None:
+                    # extract mean dose
+                    #meanStructureDoseDeviation = np.abs(np.ones_like(doseScalar[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]])*self.threshDict[self.weightPriorityDict[s]]-doseScalar[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]])
+
+
+
+                    meanStructureDoseDeviation = max(abs(self.threshDict[self.weightPriorityDict[s]] - np.average(doseScalar[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]]))**2, 1.)
+
+                    #under = under/meanStructureDoseDeviation
+                    #over = over/meanStructureDoseDeviation
+
+                if overrideWeightStructureName == self.structureNamesInverse[self.weightPriorityDict[s]]:
+                    over = over * overrideWeightScalar
+                    under = under * overrideWeightScalar
+
 
                 self.basePenaltyUnder[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
                                                                                                                   under / \
@@ -182,6 +205,9 @@ class data(object):
                                                                                                                       self.structureNamesInverse[
                                                                                                                           self.weightPriorityDict[
                                                                                                                               s]]].size
+
+
+
                 self.basePenaltyOver[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = 1. * \
                                                                                                                   over / \
                                                                                                                   self.structureVoxels[
@@ -189,7 +215,14 @@ class data(object):
                                                                                                                           self.weightPriorityDict[
                                                                                                                               s]]].size
 
+
+
                 self.baseThresh[self.structureVoxels[self.structureNamesInverse[self.weightPriorityDict[s]]]] = self.threshDict[self.weightPriorityDict[s]]
+
+
+        for s in range(self.nStructures):
+            if self.structureVoxels[s].size > 0:
+                print self.structureNames[s],'basePenalty:',self.basePenaltyOver[self.structureVoxels[s][0]],'primary:',self.overPenalty[self.structureVoxels[s][0]]
 
 
     def updateOverUnderThresh(self, newThreshU=None, newThreshO=None):
